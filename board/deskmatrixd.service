@@ -1,0 +1,14 @@
+[Unit]
+Description=DeskMatrix LED matrix daemon
+After=arduino-router.service
+Wants=arduino-router.service
+
+[Service]
+User=arduino
+SupplementaryGroups=arduino-router
+ExecStart=/usr/bin/python3 /home/arduino/deskmatrix/deskmatrixd.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
