@@ -6,7 +6,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.app.Person
 import android.media.MediaMetadata
+import android.os.Build
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -67,11 +69,15 @@ class BridgeService : NotificationListenerService() {
         val text = n.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
 
         if (n.category == Notification.CATEGORY_CALL) {
-            // ponytail: "has an Answer action" = ringing; check on the Edge 60 Pro dialer if it misfires.
-            val ringing = n.actions?.any { it.title?.toString()?.contains("answer", true) == true } == true
+            // An answered call shows a running chronometer; a ringing one does not.
+            val ringing = !n.extras.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER)
             if (ringing && ringingKey == null) {
                 ringingKey = sbn.key
-                send("call", "state" to "ringing", "name" to title, "number" to "")
+                val person = if (Build.VERSION.SDK_INT >= 31)
+                    n.extras.getParcelable(Notification.EXTRA_CALL_PERSON, Person::class.java)?.name?.toString()
+                else null
+                val number = text.takeIf { it.count(Char::isDigit) >= 5 } ?: ""
+                send("call", "state" to "ringing", "name" to (person ?: title), "number" to number)
             } else if (!ringing && ringingKey == sbn.key) {
                 ringingKey = null
                 send("call", "state" to "answered")
@@ -82,8 +88,11 @@ class BridgeService : NotificationListenerService() {
         val app = apps[sbn.packageName]
             ?: if (sbn.packageName == Telephony.Sms.getDefaultSmsPackage(this)) "sms" else return
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0 || title.isEmpty()) return
-        // WhatsApp re-posts the same message; dedupe on key + text.
-        val h = (sbn.key + title + text).hashCode()
+        // WhatsApp re-posts old messages when a chat updates. Dedupe on the message's own
+        // timestamp, so the same text sent twice still shows twice.
+        val msgs = n.extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+        val msgTime = (msgs?.lastOrNull() as? android.os.Bundle)?.getLong("time") ?: n.`when`
+        val h = (sbn.key + title + text + msgTime).hashCode()
         if (!seen.add(h)) return
         if (seen.size > 200) seen.remove(seen.first())
         send("notification", "app" to app, "sender" to title, "text" to text)
