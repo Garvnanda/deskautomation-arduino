@@ -289,7 +289,12 @@ fun Setup(vm: BoardVm, dark: Boolean, setDark: (Boolean) -> Unit) {
         Step("1. Notification access", listenerOn) {
             ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
-        Step("2. Ignore battery optimisation", batteryFree) {
+        val phoneOk = ctx.checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        Step("2. Phone state (calls)", phoneOk) {
+            (ctx as ComponentActivity).requestPermissions(arrayOf(android.Manifest.permission.READ_PHONE_STATE), 1)
+        }
+        Step("3. Ignore battery optimisation", batteryFree) {
             ctx.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}")))
         }
 
