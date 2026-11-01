@@ -7,6 +7,9 @@ Wants=arduino-router.service
 User=arduino
 SupplementaryGroups=arduino-router
 ExecStart=/usr/bin/python3 /home/arduino/deskmatrix/deskmatrixd.py
+# Nothing written to disk: no logs.
+StandardOutput=null
+StandardError=null
 Restart=always
 RestartSec=2
 

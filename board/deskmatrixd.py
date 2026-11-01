@@ -334,10 +334,12 @@ class Board:
     def call_anim(self):
         while self.call:
             c = self.call
+            # Name first, so it is visible even if the call is picked up quickly.
+            for fb, s in scroll(f"CALL {c['name']} {c['number']}".strip(), self.settings["scroll_ms"]):
+                if not self.call:
+                    return
+                yield fb, s
             yield from flashes(2, 300, 300)
-            if not self.call:
-                return
-            yield from scroll(f"CALL {c['name']} {c['number']}".strip(), self.settings["scroll_ms"])
 
     def alarm_anim(self, label):
         self.alarm_ringing = True
@@ -368,7 +370,11 @@ class Board:
                 changed = True
                 label = sanitize(a.get("label", ""))
                 self.push(P_END, lambda label=label: self.alarm_anim(label))
-        if changed:
+        # Storage cap: drop tasks a day past due and fired alarms, so state.json stays a few KB.
+        before = len(self.tasks) + len(self.alarms)
+        self.tasks = [t for t in self.tasks if now - t["due_at"] < 86400]
+        self.alarms = [a for a in self.alarms if a["enabled"]]
+        if changed or len(self.tasks) + len(self.alarms) != before:
             self.save()
         if self.mode == "timer" and now >= self.timer_end:
             self.mode = None
@@ -433,6 +439,8 @@ class Board:
             elif path == "/tasks":
                 t = {"id": self.new_id(), "title": str(body["title"])[:100], "due_at": int(body["due_at"]),
                      "remind_before_min": max(0, int(body.get("remind_before_min", 0)))}
+                if len(self.tasks) >= 100:
+                    raise ValueError("too many tasks (max 100)")
                 self.tasks.append(t)
                 self.save()
                 return t
@@ -441,6 +449,8 @@ class Board:
                     raise ValueError("time must be HH:MM")
                 a = {"id": self.new_id(), "time": body["time"], "label": str(body.get("label", ""))[:40],
                      "enabled": True}
+                if len(self.alarms) >= 50:
+                    raise ValueError("too many alarms (max 50)")
                 self.alarms.append(a)
                 self.save()
                 return a
