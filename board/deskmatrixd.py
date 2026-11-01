@@ -305,9 +305,11 @@ class Board:
             state = e.get("state")
             with self.lock:
                 if state == "ringing":
+                    already = self.call is not None
                     self.call = {"name": sanitize(e.get("name", ""), 30),
                                  "number": sanitize(e.get("number", ""), 20)}
-                    self.push(P_CALL, self.call_anim)
+                    if not already:  # a second "ringing" only updates the name
+                        self.push(P_CALL, self.call_anim)
                 else:
                     self.call = None
         elif kind == "battery":
@@ -332,7 +334,11 @@ class Board:
                 self.push_alert(P_MESSAGE, "media", f"NOW PLAYING {title} - {artist}".rstrip(" -"))
 
     def call_anim(self):
+        give_up = time.time() + 90  # if the "ended" event is lost, stop anyway
         while self.call:
+            if time.time() > give_up:
+                self.call = None
+                return
             c = self.call
             # Name first, so it is visible even if the call is picked up quickly.
             for fb, s in scroll(f"CALL {c['name']} {c['number']}".strip(), self.settings["scroll_ms"]):
